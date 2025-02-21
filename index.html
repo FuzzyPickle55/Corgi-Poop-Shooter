@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Corgi Poop Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #000;
+        }
+        canvas {
+            border: 1px solid #fff;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <audio id="fartSound" src="fart.wav" preload="auto" style="display: none;"></audio>
+    <script>
+        // Get canvas and context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Load images (now PNGs)
+        const corgiImg = new Image();
+        corgiImg.src = 'corgi.png';
+        const poopImg = new Image();
+        poopImg.src = 'poop.png';
+        const ufoImg = new Image();
+        ufoImg.src = 'ufo.png';
+
+        // Load sound
+        const fartSound = document.getElementById('fartSound');
+
+        // Corgi (player) object
+        const corgi = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            width: 50,  // Adjust based on your corgi.png size
+            height: 50,
+            angle: 0,
+            speed: 0,
+            maxSpeed: 5,
+            rotationSpeed: 0.05,
+        };
+
+        // Game state
+        let keys = {};
+        let bullets = [];
+        let aliens = [];
+
+        // Handle keyboard input
+        window.addEventListener('keydown', (e) => keys[e.code] = true);
+        window.addEventListener('keyup', (e) => keys[e.code] = false);
+
+        // Alien object
+        function createAlien() {
+            const baseSize = 50; // Base size in pixels, scaled from your ~400-500px ufo.png
+            const sizeVariation = Math.random() * 20 - 10; // ±10 pixels for variation
+            return {
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                size: baseSize + sizeVariation, // Now 40-60 pixels
+                vx: (Math.random() - 0.5) * 4,
+                vy: (Math.random() - 0.5) * 4,
+            };
+        }
+
+        // Spawn initial aliens
+        for (let i = 0; i < 5; i++) {
+            aliens.push(createAlien());
+        }
+
+        // Main game loop
+        function update() {
+            // Clear canvas
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Handle corgi movement
+            if (keys['ArrowLeft']) corgi.angle -= corgi.rotationSpeed;
+            if (keys['ArrowRight']) corgi.angle += corgi.rotationSpeed;
+            if (keys['ArrowUp']) {
+                corgi.speed = Math.min(corgi.speed + 0.1, corgi.maxSpeed);
+            } else {
+                corgi.speed *= 0.98;
+            }
+            if (keys['Space'] && !keys['spacePressed']) {
+                shootPoop();
+                keys['spacePressed'] = true;
+            }
+            if (!keys['Space']) keys['spacePressed'] = false;
+
+            // Update corgi position
+            corgi.x += Math.cos(corgi.angle) * corgi.speed;
+            corgi.y += Math.sin(corgi.angle) * corgi.speed;
+
+            // Wrap around screen edges
+            if (corgi.x < 0) corgi.x = canvas.width;
+            if (corgi.x > canvas.width) corgi.x = 0;
+            if (corgi.y < 0) corgi.y = canvas.height;
+            if (corgi.y > canvas.height) corgi.y = 0;
+
+            // Draw corgi
+            ctx.save();
+            ctx.translate(corgi.x, corgi.y);
+            ctx.rotate(corgi.angle + Math.PI / 2);
+            ctx.drawImage(corgiImg, -corgi.width / 2, -corgi.height / 2, corgi.width, corgi.height);
+            ctx.restore();
+
+            // Update and draw bullets
+            bullets.forEach((bullet, index) => {
+                bullet.x += bullet.vx;
+                bullet.y += bullet.vy;
+                if (bullet.x < 0 || bullet.x > canvas.width || bullet.y < 0 || bullet.y > canvas.height) {
+                    bullets.splice(index, 1);
+                } else {
+                    ctx.drawImage(poopImg, bullet.x - 5, bullet.y - 5, 10, 10); // Adjust poop size as needed
+                }
+            });
+
+            // Update and draw aliens
+            aliens.forEach((alien, index) => {
+                alien.x += alien.vx;
+                alien.y += alien.vy;
+
+                // Bounce off edges
+                if (alien.x < 0 || alien.x > canvas.width) alien.vx *= -1;
+                if (alien.y < 0 || alien.y > canvas.height) alien.vy *= -1;
+
+                // Draw UFO
+                ctx.drawImage(ufoImg, alien.x - alien.size / 2, alien.y - alien.size / 2, alien.size, alien.size);
+
+                // Check collision with bullets
+                bullets.forEach((bullet, bIndex) => {
+                    const dx = bullet.x - alien.x;
+                    const dy = bullet.y - alien.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < alien.size / 2) {
+                        aliens.splice(index, 1);
+                        bullets.splice(bIndex, 1);
+                        aliens.push(createAlien()); // Respawn a new alien
+                    }
+                });
+            });
+
+            requestAnimationFrame(update);
+        }
+
+        // Shoot poop
+        function shootPoop() {
+            const bulletSpeed = 7;
+            bullets.push({
+                x: corgi.x,
+                y: corgi.y,
+                vx: Math.cos(corgi.angle) * bulletSpeed,
+                vy: Math.sin(corgi.angle) * bulletSpeed,
+            });
+            fartSound.currentTime = 0; // Reset sound to start
+            fartSound.play();          // Play fart sound
+        }
+
+        // Start game when images and sound are loaded
+        Promise.all([
+            new Promise((resolve) => corgiImg.onload = resolve),
+            new Promise((resolve) => poopImg.onload = resolve),
+            new Promise((resolve) => ufoImg.onload = resolve),
+            new Promise((resolve) => fartSound.onloadeddata = resolve),
+        ]).then(() => update());
+    </script>
+</body>
+</html>
